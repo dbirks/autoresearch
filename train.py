@@ -17,12 +17,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from kernels import get_kernel
-cap = torch.cuda.get_device_capability()
-# varunneal's FA3 is Hopper only, use kernels-community on non-Hopper GPUs
-repo = "varunneal/flash-attention-3" if cap == (9, 0) else "kernels-community/flash-attn3"
-fa3 = get_kernel(repo).flash_attn_interface
-
 from prepare import MAX_SEQ_LEN, TIME_BUDGET, Tokenizer, make_dataloader, evaluate_bpb
 
 # ---------------------------------------------------------------------------
@@ -90,8 +84,17 @@ class CausalSelfAttention(nn.Module):
         q, k = apply_rotary_emb(q, cos, sin), apply_rotary_emb(k, cos, sin)
         q, k = norm(q), norm(k)
 
-        y = fa3.flash_attn_func(q, k, v, causal=True, window_size=window_size)
-        y = y.contiguous().view(B, T, -1)
+        q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
+        left = window_size[0]
+        enable_gqa = self.n_kv_head != self.n_head
+        if left >= T:
+            y = F.scaled_dot_product_attention(q, k, v, is_causal=True, enable_gqa=enable_gqa)
+        else:
+            idx = torch.arange(T, device=x.device)
+            delta = idx[:, None] - idx[None, :]
+            mask = (delta >= 0) & (delta <= left)
+            y = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, enable_gqa=enable_gqa)
+        y = y.transpose(1, 2).contiguous().view(B, T, -1)
         y = self.c_proj(y)
         return y
 

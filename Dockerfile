@@ -2,7 +2,7 @@ FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04
 
 # Build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl ca-certificates python3 python3-pip build-essential \
+    git curl ca-certificates python3 python3-dev python3-pip build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv

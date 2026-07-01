@@ -21,3 +21,6 @@ dev/
 
 # Results file
 results.tsv
+
+# Container configs (managed in home-k8s)
+k8s/
